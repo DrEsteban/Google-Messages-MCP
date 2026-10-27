@@ -1,14 +1,15 @@
 # Google Messages MCP as a headless server with persistent storage.
 #
 # Usage:
-#     docker compose up -d
+#     docker compose pull
+#     docker compose up -d --no-build
 #     docker compose exec gmessages gmessages pair    # one-time
 #     # then connect Claude / other MCP clients to http://localhost:7007/mcp/sse
 
 services:
   gmessages:
     build: .
-    image: gmessages:latest
+    image: ghcr.io/dresteban/google-messages-mcp:latest
     container_name: gmessages
     restart: unless-stopped
     ports:
