@@ -11,8 +11,8 @@
 
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS build
 RUN apk add --no-cache tzdata && \
-    addgroup -S -g 10001 gmessages && \
-    adduser -S -u 10001 -G gmessages -h /home/gmessages gmessages && \
+    addgroup -S -g 101 gmessages && \
+    adduser -S -u 100 -G gmessages -h /home/gmessages gmessages && \
     mkdir -p /data
 WORKDIR /src
 COPY go.mod go.sum ./
@@ -34,9 +34,9 @@ FROM busybox:1.37.0-musl
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build /etc/passwd /etc/group /etc/
-COPY --from=build --chown=10001:10001 /home/gmessages /home/gmessages
-COPY --from=build --chown=10001:10001 /data /data
-USER 10001:10001
+COPY --from=build --chown=100:101 /home/gmessages /home/gmessages
+COPY --from=build --chown=100:101 /data /data
+USER 100:101
 WORKDIR /home/gmessages
 COPY --from=build /out/gmessages /usr/local/bin/gmessages
 

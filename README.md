@@ -276,7 +276,8 @@ docker compose exec gmessages gmessages pair --google-file /data/cookies.txt
 ```
 
 To build locally instead, run `docker compose up -d --build`. For a bind-mounted
-data directory, ensure it is writable by container UID/GID `10001:10001`.
+data directory, ensure it is writable by container UID/GID `100:101` (unchanged
+from the previous Alpine image).
 Do not expose port 7007 to untrusted networks without access controls.
 
 Publishing uses the workflow's `GITHUB_TOKEN` with package-write permission;
