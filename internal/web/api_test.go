@@ -3351,6 +3351,114 @@ func TestProtectLocalControlRejectsMCPOnlyCrossOriginRequests(t *testing.T) {
 	}
 }
 
+func TestProtectLocalControlRemoteControl(t *testing.T) {
+	settings := []struct {
+		value string
+		allow bool
+	}{
+		{"", false},
+		{"0", false},
+		{"false", false},
+		{"no", false},
+		{"off", false},
+		{"invalid", false},
+		{"1", true},
+		{"true", true},
+		{"yes", true},
+		{"on", true},
+		{" TRUE ", true},
+	}
+	requests := []struct {
+		name    string
+		host    string
+		origin  string
+		referer string
+		local   bool
+	}{
+		{name: "local native", host: "127.0.0.1:7007", local: true},
+		{name: "local browser", host: "127.0.0.1:7007", origin: "http://127.0.0.1:7007", local: true},
+		{name: "remote native", host: "192.0.2.1:7007"},
+		{name: "remote browser", host: "messages.example.com", origin: "https://messages.example.com"},
+		{name: "remote referer", host: "messages.example.com", referer: "https://messages.example.com/"},
+		{name: "cross origin", host: "127.0.0.1:7007", origin: "https://other.example.com"},
+		{name: "cross origin referer", host: "127.0.0.1:7007", referer: "https://other.example.com/"},
+	}
+	for _, setting := range settings {
+		t.Run("setting="+setting.value, func(t *testing.T) {
+			t.Setenv("GMESSAGES_ALLOW_REMOTE_CONTROL", setting.value)
+			// A non-loopback bind address alone must not disable the guard.
+			t.Setenv("GMESSAGES_HOST", "0.0.0.0")
+			handler := ProtectLocalControl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			for _, path := range []string{"/api/status", "/mcp", "/mcp/sse", "/"} {
+				for _, request := range requests {
+					t.Run(path+"/"+request.name, func(t *testing.T) {
+						req := httptest.NewRequest(http.MethodPost, path, nil)
+						req.Host = request.host
+						req.Header.Set("Origin", request.origin)
+						req.Header.Set("Referer", request.referer)
+						rec := httptest.NewRecorder()
+						handler.ServeHTTP(rec, req)
+
+						want := http.StatusForbidden
+						if setting.allow || request.local || path == "/" {
+							want = http.StatusNoContent
+						}
+						if rec.Code != want {
+							t.Fatalf("status = %d, want %d", rec.Code, want)
+						}
+						if want == http.StatusNoContent {
+							if got := rec.Header().Get("Content-Security-Policy"); !strings.Contains(got, "connect-src 'self'") {
+								t.Errorf("missing CSP connect-src restriction: %q", got)
+							}
+							if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+								t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+							}
+							if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+								t.Errorf("Referrer-Policy = %q, want no-referrer", got)
+							}
+							if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "" {
+								t.Errorf("unexpected CORS header: %q", got)
+							}
+						}
+					})
+				}
+			}
+		})
+	}
+}
+
+func TestAPIAndMCPAllowRemoteControl(t *testing.T) {
+	t.Setenv("GMESSAGES_ALLOW_REMOTE_CONTROL", "1")
+	store, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	mcpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	handler := APIHandlerWithOptions(store, nil, zerolog.Nop(), mcpHandler, APIOptions{})
+	for _, path := range []string{"/api/status", "/mcp", "/mcp/sse"} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://192.0.2.1:7007"+path, nil)
+			req.Header.Set("Origin", "http://192.0.2.1:7007")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+
+			want := http.StatusNoContent
+			if path == "/api/status" {
+				want = http.StatusOK
+			}
+			if rec.Code != want {
+				t.Fatalf("status = %d, want %d; body: %s", rec.Code, want, rec.Body.String())
+			}
+		})
+	}
+}
+
 func TestBackfillPhoneRequiresPost(t *testing.T) {
 	ts := newTestServer(t)
 

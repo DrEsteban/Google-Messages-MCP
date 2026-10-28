@@ -213,6 +213,7 @@ The web UI runs at `http://127.0.0.1:7007` when the server is started. It provid
 | `GMESSAGES_LOG_LEVEL` | `info` | Log level (debug/info/warn/error/trace) |
 | `GMESSAGES_PORT` | `7007` | Web UI / MCP HTTP port |
 | `GMESSAGES_HOST` | `127.0.0.1` | Host/interface to bind the local server to (loopback-only by default) |
+| `GMESSAGES_ALLOW_REMOTE_CONTROL` | unset (off) | Set to `1`/`true`/`yes`/`on` to disable the local-only Host/Origin/Referer checks for `/api/*`, `/mcp`, and `/mcp/*` (including MCP-only mode). Requires trusted external access controls; see below. |
 | `GMESSAGES_MY_NAME` | OS user name (falls back to `Me`) | Display name attributed to your own outgoing WhatsApp/Signal messages (live sends and imports) |
 | `GMESSAGES_STARTUP_BACKFILL` | `auto` | Startup history sync mode: `auto`, `shallow`, `deep`, or `off` |
 | `GMESSAGES_BACKFILL_DISCOVER_ORPHANS` | `0` | Opt in to deep backfill's Phase C (contact-based orphan discovery). **Off by default** because it creates an empty SMS thread on your phone for each contact without prior message history. Enable with `1`/`true`/`yes`/`on` only if you understand the side effect. |
@@ -250,7 +251,8 @@ the rest of messaging continues to work normally.
 ## Privacy & security
 
 - All messages and contacts are stored **locally** in a SQLite database in your data dir.
-- The server binds to `127.0.0.1` by default — it is not reachable from other machines. Changing `GMESSAGES_HOST` (e.g. to `0.0.0.0`) exposes the web UI and MCP endpoint to your network; do so only behind trusted access controls.
+- The server binds to `127.0.0.1` by default — it is not reachable from other machines. Changing `GMESSAGES_HOST` (e.g. to `0.0.0.0`) makes the listener reachable on your network, but protected API/MCP requests still require a loopback Host and, when present, a same-origin loopback Origin/Referer.
+- To permit remote API/MCP access, also set `GMESSAGES_ALLOW_REMOTE_CONTROL=1` and restart the server. For example, on Linux/macOS: `GMESSAGES_HOST=0.0.0.0 GMESSAGES_ALLOW_REMOTE_CONTROL=1 gmessages serve`. This explicitly disables those Host/Origin/Referer checks; it does not add authentication or permissive CORS headers. Security response headers remain enabled. **Anyone who can reach the server can read messages and invoke control APIs, including sending messages.** Only enable this behind trusted external access controls (such as an authenticated reverse proxy or private VPN), never on an unprotected public listener. Browser cross-origin/DNS-rebinding protection must be provided by your deployment when this option is enabled.
 - Google account-pairing cookies are sensitive credentials. Delete any cookie file you created after pairing succeeds.
 
 ## Running as a headless server (Docker)
