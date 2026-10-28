@@ -213,6 +213,7 @@ The web UI runs at `http://127.0.0.1:7007` when the server is started. It provid
 | `GMESSAGES_LOG_LEVEL` | `info` | Log level (debug/info/warn/error/trace) |
 | `GMESSAGES_PORT` | `7007` | Web UI / MCP HTTP port |
 | `GMESSAGES_HOST` | `127.0.0.1` | Host/interface to bind the local server to (loopback-only by default) |
+| `GMESSAGES_ALLOW_REMOTE_API` | unset (off) | Set to `1`/`true`/`yes`/`on` to disable the local-only Host and Origin/Referer guard for `/api/*`, `/mcp`, and `/mcp/*`, including MCP-only mode. Requires trusted external access controls. |
 | `GMESSAGES_MY_NAME` | OS user name (falls back to `Me`) | Display name attributed to your own outgoing WhatsApp/Signal messages (live sends and imports) |
 | `GMESSAGES_STARTUP_BACKFILL` | `auto` | Startup history sync mode: `auto`, `shallow`, `deep`, or `off` |
 | `GMESSAGES_BACKFILL_DISCOVER_ORPHANS` | `0` | Opt in to deep backfill's Phase C (contact-based orphan discovery). **Off by default** because it creates an empty SMS thread on your phone for each contact without prior message history. Enable with `1`/`true`/`yes`/`on` only if you understand the side effect. |
@@ -250,7 +251,8 @@ the rest of messaging continues to work normally.
 ## Privacy & security
 
 - All messages and contacts are stored **locally** in a SQLite database in your data dir.
-- The server binds to `127.0.0.1` by default — it is not reachable from other machines. Changing `GMESSAGES_HOST` (e.g. to `0.0.0.0`) exposes the web UI and MCP endpoint to your network; do so only behind trusted access controls.
+- The server binds to `127.0.0.1` by default — it is not reachable from other machines. Changing `GMESSAGES_HOST` (e.g. to `0.0.0.0`) changes the listening interface but does not disable the local-only API guard. To use the web UI or MCP through a non-loopback address or reverse proxy, also set `GMESSAGES_ALLOW_REMOTE_API=1` and restart the server. Security headers remain enabled.
+- **Warning:** `GMESSAGES_ALLOW_REMOTE_API=1` disables both the loopback Host requirement and the Origin/Referer checks that prevent cross-origin and DNS-rebinding attacks. It does not add authentication or CORS support. Use it only behind trusted access controls (for example, an authenticated reverse proxy or restricted private network); never expose unauthenticated messaging APIs to the public internet.
 - Google account-pairing cookies are sensitive credentials. Delete any cookie file you created after pairing succeeds.
 
 ## Running as a headless server (Docker)
@@ -279,6 +281,10 @@ To build locally instead, run `docker compose up -d --build`. For a bind-mounted
 data directory, ensure it is writable by container UID/GID `100:101` (unchanged
 from the previous Alpine image).
 Do not expose port 7007 to untrusted networks without access controls.
+For access through a non-loopback hostname or reverse proxy, add
+`GMESSAGES_ALLOW_REMOTE_API: "1"` to the Compose service's `environment` section
+and recreate the container. `GMESSAGES_HOST: 0.0.0.0` alone does not disable the
+local-only API guard.
 
 Publishing uses the workflow's `GITHUB_TOKEN` with package-write permission;
 no separate registry secret is needed. After the first publish, make the GHCR

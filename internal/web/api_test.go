@@ -3351,6 +3351,94 @@ func TestProtectLocalControlRejectsMCPOnlyCrossOriginRequests(t *testing.T) {
 	}
 }
 
+func TestProtectLocalControlRemoteAPIOptIn(t *testing.T) {
+	for _, value := range []string{"", "0", "false", "no", "off", "invalid", "1", "true", "yes", "on", " TRUE "} {
+		t.Run("env="+value, func(t *testing.T) {
+			t.Setenv("GMESSAGES_ALLOW_REMOTE_API", value)
+			allowRemote := value == "1" || value == "true" || value == "yes" || value == "on" || value == " TRUE "
+			handler := ProtectLocalControl(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusNoContent)
+			}))
+
+			for _, path := range []string{"/api/status", "/mcp", "/mcp/sse", "/mcp/message", "/"} {
+				for _, request := range []struct {
+					name    string
+					host    string
+					header  string
+					origin  string
+					isLocal bool
+				}{
+					{name: "local", host: "127.0.0.1:7007", isLocal: true},
+					{name: "remote host", host: "messages.example.com"},
+					{name: "remote same origin", host: "messages.example.com", header: "Origin", origin: "https://messages.example.com"},
+					{name: "cross origin", host: "127.0.0.1:7007", header: "Origin", origin: "https://other.example.com"},
+					{name: "cross origin referer", host: "127.0.0.1:7007", header: "Referer", origin: "https://other.example.com/page"},
+				} {
+					t.Run(path+"/"+request.name, func(t *testing.T) {
+						req := httptest.NewRequest(http.MethodGet, path, nil)
+						req.Host = request.host
+						if request.header != "" {
+							req.Header.Set(request.header, request.origin)
+						}
+						resp := httptest.NewRecorder()
+						handler.ServeHTTP(resp, req)
+
+						want := http.StatusNoContent
+						if path != "/" && !allowRemote && !request.isLocal {
+							want = http.StatusForbidden
+						}
+						if resp.Code != want {
+							t.Fatalf("status = %d, want %d", resp.Code, want)
+						}
+						if want == http.StatusNoContent {
+							for _, header := range []string{"Content-Security-Policy", "X-Content-Type-Options", "Referrer-Policy"} {
+								if resp.Header().Get(header) == "" {
+									t.Errorf("missing security header %s", header)
+								}
+							}
+						}
+					})
+				}
+			}
+		})
+	}
+}
+
+func TestAPIHandlerRemoteAPIOptIn(t *testing.T) {
+	store, err := db.New(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	mcpHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	for _, value := range []string{"", "1"} {
+		t.Run("env="+value, func(t *testing.T) {
+			t.Setenv("GMESSAGES_ALLOW_REMOTE_API", value)
+			handler := APIHandlerWithOptions(store, nil, zerolog.Nop(), mcpHandler, APIOptions{})
+			for _, path := range []string{"/api/status", "/mcp", "/mcp/sse"} {
+				req := httptest.NewRequest(http.MethodGet, "http://messages.example.com:7007"+path, nil)
+				req.Header.Set("Origin", "http://messages.example.com:7007")
+				resp := httptest.NewRecorder()
+				handler.ServeHTTP(resp, req)
+
+				want := http.StatusForbidden
+				if value == "1" {
+					want = http.StatusNoContent
+					if path == "/api/status" {
+						want = http.StatusOK
+					}
+				}
+				if resp.Code != want {
+					t.Errorf("%s: status = %d, want %d; body = %s", path, resp.Code, want, resp.Body.String())
+				}
+			}
+		})
+	}
+}
+
 func TestBackfillPhoneRequiresPost(t *testing.T) {
 	ts := newTestServer(t)
 

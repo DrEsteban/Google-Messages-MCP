@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"runtime"
 	"sort"
 	"strconv"
@@ -2763,7 +2764,7 @@ func APIHandlerWithOptions(store *db.Store, cli *client.Client, logger zerolog.L
 	}
 
 	// Guard local control surfaces against cross-origin / DNS-rebinding abuse. The server
-	// binds to 127.0.0.1, but that does NOT stop a malicious web page the user
+	// binds to 127.0.0.1 by default, but that does NOT stop a malicious web page the user
 	// visits from talking to http://127.0.0.1:<port>/api/... or /mcp/... .
 	// Requiring a loopback Host and, when present, a same-origin loopback
 	// Origin/Referer closes that vector without affecting native app requests.
@@ -2771,10 +2772,17 @@ func APIHandlerWithOptions(store *db.Store, cli *client.Client, logger zerolog.L
 }
 
 // ProtectLocalControl rejects cross-origin browser access to local control
-// surfaces such as /api/* and /mcp/*.
+// surfaces such as /api/* and /mcp/*. GMESSAGES_ALLOW_REMOTE_API explicitly
+// disables the request guard for deployments with external access controls.
+// Security headers remain enabled in either mode.
 func ProtectLocalControl(handler http.Handler) http.Handler {
+	allowRemoteAPI := false
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("GMESSAGES_ALLOW_REMOTE_API"))) {
+	case "1", "true", "yes", "on":
+		allowRemoteAPI = true
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if isProtectedLocalPath(r.URL.Path) && !isLocalControlRequest(r) {
+		if !allowRemoteAPI && isProtectedLocalPath(r.URL.Path) && !isLocalControlRequest(r) {
 			httpError(w, "forbidden: API requests must originate from the local Google Messages MCP app", http.StatusForbidden)
 			return
 		}
