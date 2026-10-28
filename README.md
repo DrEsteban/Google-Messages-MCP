@@ -251,8 +251,8 @@ the rest of messaging continues to work normally.
 ## Privacy & security
 
 - All messages and contacts are stored **locally** in a SQLite database in your data dir.
-- The server binds to `127.0.0.1` by default — it is not reachable from other machines. Changing `GMESSAGES_HOST` (e.g. to `0.0.0.0`) changes the listening interface but does not disable the local-only API guard. To use the web UI or MCP through a non-loopback address or reverse proxy, also set `GMESSAGES_ALLOW_REMOTE_API=1` and restart the server. Security headers remain enabled.
-- **Warning:** `GMESSAGES_ALLOW_REMOTE_API=1` disables both the loopback Host requirement and the Origin/Referer checks that prevent cross-origin and DNS-rebinding attacks. It does not add authentication or CORS support. Use it only behind trusted access controls (for example, an authenticated reverse proxy or restricted private network); never expose unauthenticated messaging APIs to the public internet.
+- The server binds to `127.0.0.1` by default — it is not reachable from other machines. Changing `GMESSAGES_HOST` (e.g. to `0.0.0.0`) changes the listening interface but does not disable the local-only API guard. To use the web UI or MCP through a non-loopback address or reverse proxy, also set `GMESSAGES_ALLOW_REMOTE_API=1` and restart the server. For example, on Linux/macOS: `GMESSAGES_HOST=0.0.0.0 GMESSAGES_ALLOW_REMOTE_API=1 gmessages serve`. Security headers remain enabled.
+- **Warning:** `GMESSAGES_ALLOW_REMOTE_API=1` disables both the loopback Host requirement and the Origin/Referer checks that prevent cross-origin and DNS-rebinding attacks. It does not add authentication or CORS support. **Anyone who can reach the server can read and send messages.** Use it only behind trusted external access controls (for example, an authenticated reverse proxy or restricted private network). Your deployment must also provide browser cross-origin/DNS-rebinding protection; never expose unauthenticated messaging APIs to the public internet.
 - Google account-pairing cookies are sensitive credentials. Delete any cookie file you created after pairing succeeds.
 
 ## Running as a headless server (Docker)
